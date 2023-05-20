@@ -41,6 +41,7 @@ def run_all_audio_files(directory, write_to_path, pl):
     for filename in os.listdir(directory):
         try:
             file_path = os.path.join(directory, filename)
+            print('File path: ', file_path)
             diarization = pl(file_path)
             curr_num += 1
             if not os.path.exists(write_to_path):
@@ -52,6 +53,7 @@ def run_all_audio_files(directory, write_to_path, pl):
             new_filename = filename.replace('.wav', '') + '_p.rttm'
             output_file = os.path.join(write_to_path, new_filename)
             # dump the diarization output to disk using RTTM format
+            print(f'Writing output to file: {output_file}')
             with open(output_file, "w", encoding='utf-8') as rttm:
                 diarization.write_rttm(rttm)
             percentage = float(curr_num / number_of_files) * 100
@@ -67,7 +69,7 @@ try:
     print('Loading pipeline from pyannote...')
     # If token do not work, create a new one!
     pipeline = Pipeline.from_pretrained("pyannote/speaker-diarization",
-                                    use_auth_token="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")
+                                    use_auth_token="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")
 except ImportError:
     print('Could not load the pipeline! Check if pyannote.audio and torch is installed.')
 
@@ -75,7 +77,10 @@ check_device()
 
 # run the pipeline on all audio files in the directory
 if pipeline is not None:
-    run_all_audio_files("./Dataset/audio", "./Dataset/output", pl = pipeline)
+    #run_all_audio_files("./Dataset/audio", "./Dataset/output", pl = pipeline)
+    diarization = pipeline("./Dataset/audio/whmpa.wav")
+    diarization_itertracks = diarization.itertracks(yield_label=True)
+    print_output_in_console(diarization_itertracks)
 else:
     print('Pipeline was not loaded!')
 
