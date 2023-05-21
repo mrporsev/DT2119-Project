@@ -5,6 +5,7 @@ It should pass all data into the pipeline and outputs the data into a .rttm form
 #We should create custom pipeline with custom clustering module, also fix a custom speaker embedding model for d-vectors. 
 # Use the speaker embedding for D-vectors!!!, Github som heter D-vector with pretrained model.
 
+import numpy as np
 import torch
 import distutils.version
 import os
@@ -42,7 +43,14 @@ def run_all_audio_files(directory, write_to_path, pl):
     for filename in os.listdir(directory):
         try:
             file_path = os.path.join(directory, filename)
-            diarization = pl(file_path)
+            #diarization = pl(file_path)
+            #NEW
+            waveform, sample_rate = librosa.load(file_path, sr=None)
+            # Convert the numpy array to PyTorch tensor and add an extra dimension
+            waveform_tensor = torch.tensor(waveform)[None, :]
+            audio = {'uri': file_path, 'waveform': waveform_tensor, 'sample_rate': sample_rate}
+            diarization = pl(audio)
+            #NEW
             curr_num += 1
             if not os.path.exists(write_to_path):
                 os.makedirs(write_to_path)
@@ -68,37 +76,66 @@ from pyannote.audio import Model
 from pyannote.audio.utils.signal import Binarize
 from pyannote.core import SlidingWindowFeature
 from pyannote.metrics.diarization import GreedyDiarizationErrorRate
+from pyannote.audio import Pipeline
+import librosa
 
 class CustomDiarization(Pipeline):
     def __init__(self):
         super().__init__()
 
         # load pre-trained VAD model
-        self.vad = VoiceActivityDetection.from_pretrained("pyannote/vad",
-                                                          use_auth_token="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")
+        # self.vad = VoiceActivityDetection.from_pretrained("pyannote/vad",
+        #                                                   use_auth_token="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")
+        self.vad = Pipeline.from_pretrained("pyannote/voice-activity-detection",
+                                            use_auth_token="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")
 
         # load pre-trained speaker embedding model
         self.speaker_embedding = Model.from_pretrained("pyannote/embedding",
-                                                       use_auth_token="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")
+                                                       use_auth_token="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")
         
         # Binarize VAD scores with a 0.5 threshold.
-        self.binarize = Binarize(offset=0.52, onset=0.52, log_scale=True, min_duration_off=0.1, min_duration_on=0.1)
+        self.binarize = Binarize(offset=0.52, onset=0.52, min_duration_off=0.1, min_duration_on=0.1)
 
         # Diariozation error rate
         self.diarization_error_rate = {"collar": 0.0, "skip_overlap": False}
 
-    def apply_vad(self, audio):
-                # Apply VAD
-        vad_scores = self.vad(audio)
-        speech = self.binarize.apply(vad_scores, dimension=1)
+    def apply(self, audio: dict):
+        # Extract waveform and sample rate from the audio dictionary
+        print('Extracting waveform and sample rate ...')
+        uri = audio['uri']
+        waveform = audio['waveform']
+        sample_rate = audio['sample_rate']
+        
+        # Apply VAD
+        print('Applying VAD ...')
+        vad_scores = self.vad({'waveform': waveform, 'sample_rate': sample_rate})
+
+        speech = vad_scores
 
         # Apply speech embedding
-        embeddings = self.speaker_embedding(audio)
+        print('Applying speech embedding ...')
+        embeddings = self.speaker_embedding(waveform)
+        print(embeddings)
 
         # Transform embeddings to match VAD segments
-        vad_embeddings = embeddings.crop(speech)
+        print('Transforming embeddings to match VAD segments ...')
+        #vad_embeddings = embeddings.crop(speech)
+         # create binary mask from vad_scores
+        mask = np.zeros_like(embeddings.detach().numpy())
+        hop_length_seconds = 0.01
+        for segment in vad_scores.itertracks():
+            print('Segment 0: ', segment[0])
+            print('Segment 1: ', segment[1])
+            print('Segment type: ', type(segment[0]))
+            start_index = int(segment[0] / hop_length_seconds)
+            end_index = int(segment[1] / hop_length_seconds)
+            mask[start_index:end_index] = 1
+
+        # use VAD scores to modify embeddings
+        vad_embeddings = embeddings * mask
 
         # Perform your custom spectral clustering on the embeddings (OUR CUSTOM SPECTRAL CLUSTERING ALGORITHM)
+        print('Performing custom spectral clustering ...')
         clusters = my_spectral_clustering(vad_embeddings.data)
 
         # Convert the clusters back into pyannote.core.Annotation format and return
