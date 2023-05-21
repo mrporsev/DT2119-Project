@@ -68,29 +68,35 @@ from pyannote.audio import Model
 from pyannote.audio.utils.signal import Binarize
 from pyannote.core import SlidingWindowFeature
 from pyannote.metrics.diarization import GreedyDiarizationErrorRate
+from pyannote.audio import Pipeline
 
 class CustomDiarization(Pipeline):
     def __init__(self):
         super().__init__()
 
         # load pre-trained VAD model
-        self.vad = VoiceActivityDetection.from_pretrained("pyannote/vad",
-                                                          use_auth_token="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")
+        # self.vad = VoiceActivityDetection.from_pretrained("pyannote/vad",
+        #                                                   use_auth_token="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")
+        self.vad = Pipeline.from_pretrained("pyannote/voice-activity-detection",
+                                            use_auth_token="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")
 
         # load pre-trained speaker embedding model
         self.speaker_embedding = Model.from_pretrained("pyannote/embedding",
-                                                       use_auth_token="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")
+                                                       use_auth_token="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")
         
         # Binarize VAD scores with a 0.5 threshold.
-        self.binarize = Binarize(offset=0.52, onset=0.52, log_scale=True, min_duration_off=0.1, min_duration_on=0.1)
+        self.binarize = Binarize(offset=0.52, onset=0.52, min_duration_off=0.1, min_duration_on=0.1)
 
         # Diariozation error rate
         self.diarization_error_rate = {"collar": 0.0, "skip_overlap": False}
 
-    def apply_vad(self, audio):
-                # Apply VAD
+    def apply(self, audio):
+        # Apply VAD
         vad_scores = self.vad(audio)
-        speech = self.binarize.apply(vad_scores, dimension=1)
+        # Print the type of vad_scores
+        print(type(vad_scores))
+        #speech = self.binarize(vad_scores)
+        speech = vad_scores
 
         # Apply speech embedding
         embeddings = self.speaker_embedding(audio)
