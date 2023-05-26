@@ -237,6 +237,7 @@ if __name__ == '__main__':
 	device = torch.device("cuda" if use_cuda else "cpu")
 
 	train_dataset = torchaudio.datasets.LIBRISPEECH(".", url='train-clean-100', download=True)
+	print("train_dataset", len(train_dataset))
 	val_dataset = torchaudio.datasets.LIBRISPEECH(".", url='dev-clean', download=True)
 	test_dataset = torchaudio.datasets.LIBRISPEECH(".", url='test-clean', download=True)
 
