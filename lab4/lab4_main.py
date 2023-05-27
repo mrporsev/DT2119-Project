@@ -9,6 +9,8 @@ import torch.optim as optim
 import numpy as np
 import argparse
 
+from lab4_proto import dataProcessing, train_audio_transform, test_audio_transform, intToStr as intToText, strToInt, levenshteinDistance, greedyDecoder
+
 '''
 HYPERPARAMETERS
 '''
