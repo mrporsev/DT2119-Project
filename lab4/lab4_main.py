@@ -8,8 +8,9 @@ import torch.utils.data as data
 import torch.optim as optim
 import numpy as np
 import argparse
+from pathlib import Path
 
-from lab4_proto import dataProcessing, train_audio_transform, test_audio_transform, intToStr as intToText, strToInt, levenshteinDistance, greedyDecoder
+from lab4_proto import dataProcessing, train_audio_transform, test_audio_transform, intToStr as intToText, strToInt, levenshteinDistance, greedyDecoder, languageDecoder
 
 '''
 HYPERPARAMETERS
@@ -23,7 +24,7 @@ hparams = {
 	"stride": 2,
 	"dropout": 0.1,
 	"learning_rate": 5e-4, 
-	"batch_size": 30, 
+	"batch_size": 2, 
 	"epochs": 20
 }
 
@@ -237,11 +238,16 @@ if __name__ == '__main__':
 	use_cuda = torch.cuda.is_available()
 	torch.manual_seed(7)
 	device = torch.device("cuda" if use_cuda else "cpu")
+	print('device', device)
 
 	train_dataset = torchaudio.datasets.LIBRISPEECH(".", url='train-clean-100', download=True)
+	print("train_dataset type", type(train_dataset))
+	train_dataset = torch.utils.data.Subset(train_dataset, range(0, 5))
 	print("train_dataset", len(train_dataset))
 	val_dataset = torchaudio.datasets.LIBRISPEECH(".", url='dev-clean', download=True)
+	val_dataset = torch.utils.data.Subset(val_dataset, range(0, 3))
 	test_dataset = torchaudio.datasets.LIBRISPEECH(".", url='test-clean', download=True)
+	test_dataset = torch.utils.data.Subset(test_dataset, range(0, 3))
 
 	kwargs = {'num_workers': 1, 'pin_memory': True} if use_cuda else {}
 	train_loader = data.DataLoader(dataset=train_dataset,
@@ -281,9 +287,10 @@ if __name__ == '__main__':
 	print(args.mode)
 
 	if args.model != '':
-		model.load_state_dict(torch.load(args.model))
+		model.load_state_dict(torch.load(args.model, map_location=torch.device(device)))
 
 	if args.mode == 'train':
+		Path("checkpoints").mkdir(parents=True, exist_ok=True)
 		for epoch in range(hparams['epochs']):
 			train(model, device, train_loader, criterion, optimizer, epoch)
 			test(model, device, val_loader, criterion, epoch)
@@ -298,6 +305,7 @@ if __name__ == '__main__':
 			spectrogram = test_audio_transform(waveform)
 			input = torch.unsqueeze(spectrogram,dim=0).to(device)
 			output = model(input)
-			text = greedyDecoder(output)
+			#text = greedyDecoder(output)
+			text = languageDecoder(output)
 			print('wavfile:',wavfile)
 			print('text:',text)

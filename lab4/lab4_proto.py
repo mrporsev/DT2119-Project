@@ -33,7 +33,7 @@ def intToStr(labels):
     index2char = [char for char in vocab]
     #print(index2char)
     
-    return ''.join([index2char[label] for label in labels])
+    return ''.join([index2char[int(label)] for label in labels])
 
 
 def strToInt(text):
@@ -56,6 +56,7 @@ def strToInt(text):
 
 x = strToInt("hello world'")
 print(x)
+x = np.array(x, dtype=np.float32)
 y = intToStr(x)
 print(y)
 print()
@@ -183,9 +184,10 @@ def languageDecoder(output, blank_label=28):
 
     labels = [c for c in "' abcdefghijklmnopqrstuvwxyz"]
     model = 'lab4/wiki-interpolate.3gram.arpa'
+    print("model path: ", model)
     decoder = build_ctcdecoder(
         labels,
-        kenlm_model_path=model,
+        kenlm_model_path="wiki-interpolate.3gram.arpa",
         alpha=0.5,
         beta=1,
     )
