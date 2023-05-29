@@ -9,6 +9,7 @@ import torch.optim as optim
 import numpy as np
 import argparse
 from pathlib import Path
+from pyctcdecode import build_ctcdecoder
 
 from lab4_proto import dataProcessing, train_audio_transform, test_audio_transform, intToStr as intToText, strToInt, levenshteinDistance, greedyDecoder, languageDecoder
 
@@ -224,6 +225,46 @@ def test(model, device, test_loader, criterion, epoch):
 	avg_wer = sum(test_wer)/len(test_wer)
 	print('Test set: Average loss: {:.4f}, Average CER: {:4f} Average WER: {:.4f}\n'.format(test_loss, avg_cer, avg_wer))
 
+def test_lang_decode(model, device, test_loader, criterion, alpha, beta):
+	print('\nevaluating alpha={}, beta={}…'.format(alpha, beta))
+	decoder = build_ctcdecoder(
+		[c for c in "' abcdefghijklmnopqrstuvwxyz"],
+		kenlm_model_path='lab4/wiki-interpolate.3gram.arpa',
+		alpha=alpha,
+		beta=beta,
+	)
+	model.eval()
+	test_loss = 0
+	test_cer, test_wer = [], []
+	with torch.no_grad():
+		for I, _data in enumerate(test_loader):
+			spectrograms, labels, input_lengths, label_lengths = _data 
+			spectrograms, labels = spectrograms.to(device), labels.to(device)
+
+			# model output is (batch, time, n_class)
+			output = model(spectrograms)
+			# transpose to (time, batch, n_class) in loss function
+			loss = criterion(output.transpose(0, 1), labels, input_lengths, label_lengths)
+			test_loss += loss.item() / len(test_loader)
+
+			# get target text
+			decoded_targets = []
+			for i in range(len(labels)):
+				decoded_targets.append(intToText(labels[i][:label_lengths[i]].tolist()))
+
+			# get predicted text
+			decoded_preds = languageDecoder(output, decoder)
+
+			# calculate accuracy
+			for j in range(len(decoded_preds)):
+				test_cer.append(cer(decoded_targets[j], decoded_preds[j]))
+				test_wer.append(wer(decoded_targets[j], decoded_preds[j]))
+
+	avg_cer = sum(test_cer)/len(test_cer)
+	avg_wer = sum(test_wer)/len(test_wer)
+	print('Test set: Average loss: {:.4f}, Average CER: {:4f} Average WER: {:.4f}\n'.format(test_loss, avg_cer, avg_wer))
+	return avg_cer, avg_wer
+
 '''
 MAIN PROGRAM
 '''
@@ -245,7 +286,9 @@ if __name__ == '__main__':
 	train_dataset = torch.utils.data.Subset(train_dataset, range(0, 5))
 	print("train_dataset", len(train_dataset))
 	val_dataset = torchaudio.datasets.LIBRISPEECH(".", url='dev-clean', download=True)
-	val_dataset = torch.utils.data.Subset(val_dataset, range(0, 3))
+	print("val_dataset", len(val_dataset))
+	select_val = np.random.choice(len(val_dataset), 200, replace=False)
+	val_dataset = torch.utils.data.Subset(val_dataset, select_val)
 	test_dataset = torchaudio.datasets.LIBRISPEECH(".", url='test-clean', download=True)
 	test_dataset = torch.utils.data.Subset(test_dataset, range(0, 3))
 
@@ -306,6 +349,23 @@ if __name__ == '__main__':
 			input = torch.unsqueeze(spectrogram,dim=0).to(device)
 			output = model(input)
 			#text = greedyDecoder(output)
-			text = languageDecoder(output)
+			text = languageDecoder(output, 0.5, 0.1)
 			print('wavfile:',wavfile)
 			print('text:',text)
+
+	elif args.mode == 'grid_search':
+		n_alphas = 8
+		n_betas = 8
+
+		cers = np.zeros((n_alphas, n_betas))
+		wers = np.zeros((n_alphas, n_betas))
+
+		for i, alpha in enumerate(np.linspace(0, 1, n_alphas)):
+			for j, beta in enumerate(np.linspace(0, 1, n_betas)):
+				avg_cer, avg_wer = test_lang_decode(model, device, val_loader, criterion, alpha, beta)
+				cers[i, j] = avg_cer
+				wers[i, j] = avg_wer
+
+		print(cers)
+		print(wers)
+

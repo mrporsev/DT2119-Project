@@ -10,7 +10,7 @@ from torchaudio.transforms import MelSpectrogram
 from torchaudio.transforms import FrequencyMasking, TimeMasking
 from torch import nn
 from torchaudio.functional import edit_distance
-from pyctcdecode import build_ctcdecoder
+import torch
 
 
 train_audio_transform = nn.Sequential(MelSpectrogram(n_mels=80), FrequencyMasking(15), TimeMasking(35))
@@ -54,12 +54,12 @@ def strToInt(text):
     return [char2index[char] for char in text]
 
 
-x = strToInt("hello world'")
-print(x)
-x = np.array(x, dtype=np.float32)
-y = intToStr(x)
-print(y)
-print()
+# x = strToInt("hello world'")
+# print(x)
+# x = np.array(x, dtype=np.float32)
+# y = intToStr(x)
+# print(y)
+# print()
 def dataProcessing(data, transform):
     '''
     process a batch of speech data
@@ -89,45 +89,45 @@ def dataProcessing(data, transform):
     labels = nn.utils.rnn.pad_sequence(labels_list, batch_first=True)
     return spectrograms, labels, input_lengths, label_lengths
 
-import torch
-example = torch.load('lab4/lab4_example.pt')
-print(example["spectrograms"].shape)
-Y = dataProcessing(example["data"], test_audio_transform)
-print("Printing example:")
-print(example["spectrograms"][1])
-print("Printing Y:")
-print(Y[0][1])
-for spec_idx, spec in enumerate(example["spectrograms"]):
-    if np.nanmax(np.abs(spec - Y[0][spec_idx])) > 1e-7:
-        print("Index: ", spec_idx)
-        print("Example: ", spec)
-        print("Y: ", Y[0][spec_idx])
-        print("Difference: ", spec[np.abs(spec-Y[0][spec_idx]) > 1e-7])
-        print("Our difference: ", Y[0][spec_idx][np.abs(spec-Y[0][spec_idx]) > 1e-7])
 
-#print("Y minus example:", (Y[0][1]- example["spectrograms"][1]))
+# example = torch.load('lab4/lab4_example.pt')
+# print(example["spectrograms"].shape)
+# Y = dataProcessing(example["data"], test_audio_transform)
+# print("Printing example:")
+# print(example["spectrograms"][1])
+# print("Printing Y:")
+# print(Y[0][1])
+# for spec_idx, spec in enumerate(example["spectrograms"]):
+#     if np.nanmax(np.abs(spec - Y[0][spec_idx])) > 1e-7:
+#         print("Index: ", spec_idx)
+#         print("Example: ", spec)
+#         print("Y: ", Y[0][spec_idx])
+#         print("Difference: ", spec[np.abs(spec-Y[0][spec_idx]) > 1e-7])
+#         print("Our difference: ", Y[0][spec_idx][np.abs(spec-Y[0][spec_idx]) > 1e-7])
 
-print("Printing example:")
-print(example["labels"][0])
-print("Printing Y:")
-print(Y[1][0])
+# print("Y minus example:", (Y[0][1]- example["spectrograms"][1]))
+
+# print("Printing example:")
+# print(example["labels"][0])
+# print("Printing Y:")
+# print(Y[1][0])
 # Our length is int, theirs is float
 
-print("Printing example:")
-print(example["input_lengths"])
-print("Printing Y:")
-print(Y[2])
+# print("Printing example:")
+# print(example["input_lengths"])
+# print("Printing Y:")
+# print(Y[2])
 
-print("Printing example:")
-print(example["label_lengths"])
-print("Printing Y:")
-print(Y[3])
+# print("Printing example:")
+# print(example["label_lengths"])
+# print("Printing Y:")
+# print(Y[3])
 
-print("Comparing spectrograms absolute error: ", np.nanmax(np.abs(Y[0]- example["spectrograms"])))
-print("Comparing spectrograms relative error: ", np.nanmax(np.abs(Y[0]- example["spectrograms"]) / (1e-10 + np.abs(Y[0]) + np.abs(example["spectrograms"]))))
-print("Comparing labels: ", np.nanmax(np.abs(torch.Tensor(Y[1])- example["labels"])))
-print("Comparing input_lengths: ", np.nanmax(np.abs(np.array(Y[2])- np.array(example["input_lengths"]))))
-print("Comparing label_lengths: ", np.nanmax(np.abs(np.array(Y[3])- np.array(example["label_lengths"]))))
+# print("Comparing spectrograms absolute error: ", np.nanmax(np.abs(Y[0]- example["spectrograms"])))
+# print("Comparing spectrograms relative error: ", np.nanmax(np.abs(Y[0]- example["spectrograms"]) / (1e-10 + np.abs(Y[0]) + np.abs(example["spectrograms"]))))
+# print("Comparing labels: ", np.nanmax(np.abs(torch.Tensor(Y[1])- example["labels"])))
+# print("Comparing input_lengths: ", np.nanmax(np.abs(np.array(Y[2])- np.array(example["input_lengths"]))))
+# print("Comparing label_lengths: ", np.nanmax(np.abs(np.array(Y[3])- np.array(example["label_lengths"]))))
 
 def greedyDecoder(output, blank_label=28):
     '''
@@ -174,24 +174,12 @@ def levenshteinDistance(ref,hyp):
                 matrix[i, j] = min(matrix[i-1, j-1], matrix[i-1, j], matrix[i, j-1]) + 1
     return matrix[len(ref), len(hyp)]
 
-a = "hello world"
-b = "hello world"
-print(levenshteinDistance(a, b))
-print(edit_distance(a, b))
+# a = "hello world"
+# b = "hello world"
+# print(levenshteinDistance(a, b))
+# print(edit_distance(a, b))
 
-
-def languageDecoder(output, blank_label=28):
-
-    labels = [c for c in "' abcdefghijklmnopqrstuvwxyz"]
-    model = 'lab4/wiki-interpolate.3gram.arpa'
-    print("model path: ", model)
-    decoder = build_ctcdecoder(
-        labels,
-        kenlm_model_path="wiki-interpolate.3gram.arpa",
-        alpha=0.5,
-        beta=1,
-    )
-
+def languageDecoder(output, decoder):
     decoded_strings = []
     for batch_idx in range(output.shape[0]):
         text = decoder.decode(output[batch_idx].cpu().detach().numpy())
